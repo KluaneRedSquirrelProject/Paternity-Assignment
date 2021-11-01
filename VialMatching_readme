@@ -1,0 +1,307 @@
+---
+title: "VialMatching2021-10-31"
+author: "Andrea Wishart"
+date: "31/10/2021"
+output: html_document
+---
+#This code builds on squirrel_id_finder.R (originally written by Ty Wagner with help and advice from Andrew McAdam). New code in this file written by Andrea Wishart. This code first defines the squirrel_id_finder function, then includes Wagner's example code. The remainder of the code is to search for errors related to DNA vials and squirrel IDs to work out prior to paternity assigment steps. Errors are beginning to be logged on KRSP GitHub under Database Errors; but we may want to discuss a more efficient use of the output files. 
+
+#Matching DNA vial to squirrel ID is done year-by-year using a for loop to help pin down errors in the database. 
+
+#Output files from this code: 
+
+#1. matchedvials.csv ---- contains successfully matched vial_id to squirrel_id with no detected errors (i.e., single vial to single squirrel, and vial found in only one table in the database)
+
+#2. vialmatch_errors.csv ----contains vials that matched to more than one squirrel 
+
+#3. vialmatch_multitables.csv ----contains squirrel ID - vial ID matches that are returned from multiple tables in the database (i.e., vial was entered for squirrel in both trapping AND in juvenile). If we conclude these aren't errors, I can kick this code and allow them to be OK (figured better to flag for now). 
+
+
+###NOTE: the select() function is specifically called as dplyr::select throughout. 
+
+
+
+#Load Libraries
+```{r}
+library(krsp)
+library(lubridate)
+library(stringr)
+
+```
+
+#SQL database disconnect function 
+```{r}
+dbDisconnectAll <- function(){
+  ile <- length(dbListConnections(MySQL())  )
+  lapply( dbListConnections(MySQL()), function(x) dbDisconnect(x) )
+  cat(sprintf("%s connection(s) closed.\n", ile))
+}
+dbDisconnectAll()
+```
+
+###
+#squirrel_id_finder function 
+##
+```{r }
+
+
+# Description
+# Converts vial IDs into squirrel_ids. Takes an input vector of vial IDs and 
+# searches the krsp DB for their associated squirrel_id's
+
+# Arguments
+# vial_ids: a character vector of vial IDs that appear in the dna1 or dna2
+# columns of either the trapping or juvenile tables
+
+# Value: a vector of squirrel IDs. Note that sapply() is used to simplify the
+# output so if the result is a list, check whether any vial_id is associated
+# with multiple squirrel_ids
+
+squirrel_id_finder <- function(vial_id) {
+  
+  
+  con <- krsp_connect(host = "krsp.cepb5cjvqban.us-east-2.rds.amazonaws.com",
+                      dbname = "krsp",
+                      username = Sys.getenv("krsp_user"),
+                      password = Sys.getenv("krsp_password"))
+  
+  flastall <- tbl(con, "flastall2") %>%
+    collect() %>%
+    dplyr::select(squirrel_id)
+  
+  juvenile <- tbl(con, "juvenile") %>%
+    filter(!is.na(dna1) & !is.na(dna2)) %>% 
+    dplyr::select(squirrel_id, j_dna1 = dna1, j_dna2 = dna2) %>%
+    collect()
+  
+  trapping <- tbl(con, "trapping") %>%
+    filter(!is.na(dna1) & !is.na(dna2)) %>%
+   dplyr::select(squirrel_id, trap_dna1 = dna1, trap_dna2 = dna2) %>%
+    collect()
+  
+  # make a phonebook of squirrel_ids and their vial_ids
+  id_lookup <- flastall %>%
+    left_join(trapping, by = "squirrel_id") %>%
+    left_join(juvenile, by = "squirrel_id") %>%
+   dplyr::select(squirrel_id, j_dna1, j_dna2, trap_dna1, trap_dna2) %>%
+    as.data.frame()
+  
+  # convert vial_ids to squirrel_ids by sapplying over sid_lookup()
+  sid_lookup <- function(vial_id){
+    
+    if (vial_id %in% id_lookup$trap_dna1) {
+      sid <- id_lookup[which(id_lookup$trap_dna1 == vial_id),1]
+      
+    } else if (vial_id %in% id_lookup$trap_dna2) {
+      sid <- id_lookup[which(id_lookup$trap_dna2 == vial_id),1]
+      
+    } else if (vial_id %in% id_lookup$j_dna1) {
+      sid <- id_lookup[which(id_lookup$j_dna1 == vial_id),1]
+      
+    } else if (vial_id %in% id_lookup$j_dna2) {
+      sid <- id_lookup[which(id_lookup$j_dna2 == vial_id),1]
+      
+    } else {
+      sid <- NA
+    }
+    print(sid)
+  }
+  
+  sapply(vial_id, FUN = sid_lookup, simplify = F)
+}
+
+```
+
+#Original example code
+```{r}
+#############
+## example ##
+#############
+con <- krsp_connect(host = "krsp.cepb5cjvqban.us-east-2.rds.amazonaws.com",
+                    dbname = "krsp",
+                    username = Sys.getenv("krsp_user"),
+                    password = Sys.getenv("krsp_password"))
+
+flastall <- tbl(con, "flastall2") %>%
+  collect() %>%
+  dplyr::select(squirrel_id)
+
+juvenile <- tbl(con, "juvenile") %>%
+  filter(!is.na(dna1) & !is.na(dna2)) %>%
+ dplyr::select(squirrel_id, j_dna1 = dna1, j_dna2 = dna2) %>%
+  collect()
+
+trapping <- tbl(con, "trapping") %>%
+  filter(!is.na(dna1) & !is.na(dna2)) %>%
+ dplyr::select(squirrel_id, trap_dna1 = dna1, trap_dna2 = dna2) %>%
+  collect()
+
+set.seed(27)
+vial_id <- c(sample(juvenile$j_dna1, 20), sample(juvenile$j_dna2, 20), sample(trapping$trap_dna1, 20), sample(trapping$trap_dna2, 20))
+vial_id <- vial_id[!is.na(vial_id)]
+vial_id <- vial_id[vial_id!=""]
+vial_id
+
+
+ out <- squirrel_id_finder(vial_id)
+ out
+
+```
+
+#Prepare to search for errors 
+```{r}
+
+#Renew connection and table pulls.
+dbDisconnectAll()
+con <- krsp_connect(host = "krsp.cepb5cjvqban.us-east-2.rds.amazonaws.com",
+                    dbname = "krsp",
+                    username = Sys.getenv("krsp_user"),
+                    password = Sys.getenv("krsp_password"))
+
+#Go year-by-year to help narrow down errors 
+
+#First, bring in tables WITH DATE
+
+
+flastall <- tbl(con, "flastall2") %>%
+  collect() %>%
+  dplyr::select(squirrel_id)
+
+juvenile <- tbl(con, "juvenile") %>%
+  filter(!is.na(dna1) & !is.na(dna2)) %>%
+ dplyr::select(squirrel_id, j_dna1 = dna1, j_dna2 = dna2, date_created) %>%
+  collect()
+
+trapping <- tbl(con, "trapping") %>%
+  filter(!is.na(dna1) & !is.na(dna2)) %>%
+ dplyr::select(squirrel_id, trap_dna1 = dna1, trap_dna2 = dna2, date) %>%
+  collect()
+
+#Make into dataframes and pull out year as a variable from the date
+
+juvenile_all <- as.data.frame(juvenile) 
+
+juvenile_all <- juvenile_all %>%
+  mutate(date = as.Date(date_created))%>%
+  collect()%>%
+  mutate(year = year(date))
+
+trapping_all <- as.data.frame(trapping) 
+
+trapping_all <- trapping_all %>%
+  mutate(date = as.Date(date))%>%
+  collect()%>%
+  mutate(year = year(date))
+```
+
+#Search for errors 
+```{r}
+years <-   c( "2015", "2016", "2017", "2018", "2019")
+
+ # c("1987", "1988", "1989", "1990", "1991", "1992", "1993", "1994", "1995", "1996", "1997", "1998", "1999", "2000", "2001", "2002", "2003", "2004", "2005", "2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019")
+
+errors <- list()# Create an empty object to be used to store errors
+matchedvials <- list()# Create an empty object to be used to store errors
+multitable <- list()
+
+for (y in years) {
+	print(y)
+  
+
+my.years <- y
+
+
+juvenile <- juvenile_all %>%
+  filter(year %in% my.years)
+
+trapping <- trapping_all %>%
+  filter(year %in% my.years)
+
+#Get vials for certain years 
+  vial_id <- c(juvenile$j_dna1, juvenile$j_dna2, trapping$trap_dna1, trapping$trap_dna1)
+
+
+n <- length(vial_id) #This is the length of your data (i.e. the vials that you want to match to squirrel ID  You can substitute squirrel_id for any column. This is the data the code below will loop through.
+n
+
+
+#Apply squirrel_id_finder for vials collected in your years
+ out <- squirrel_id_finder(vial_id)
+ length(out) #should be the same as length of vial_id
+ 
+ 
+ out.df <- as.data.frame(out) 
+
+#Transpose out out.df and make dataframe (output of t() is matrix)
+ 
+out.dft <- as.data.frame(t(out.df))
+
+#Make rownames (vial_id) variables in new column called vial_id
+out.dft <- tibble::rownames_to_column(out.dft, "vial_id")
+
+#Rename V1 and V2 variables 
+out.dft <- out.dft %>%
+  rename( squirrel_id1= V1, 
+          squirrel_id2= V2) %>%
+  collect()%>%
+  dplyr::select(vial_id, squirrel_id1, squirrel_id2)
+
+
+#Identify errors where the squirrel_id in V1 does not equal the squirrel_id in V2, indicating there may be two squirrels sharing a vial_id in the database OR that dna vial has been entered in multple tables in the database (i.e., trapping AND juvenile)
+
+out.dft <- out.dft %>%
+  mutate(error = ifelse(!squirrel_id1 == squirrel_id2, "error", 
+                        ifelse(str_detect(vial_id, paste("\\.")), "vial_id in multiple tables?", 
+                               "OK")),
+         year = y)
+
+
+
+annualerrors <- out.dft %>%
+  filter(error == "error")
+
+
+annualmultitable<- out.dft %>%
+  filter(error == "vial_id in multiple tables?")
+
+annualmatchedvials<- out.dft %>%
+  filter(error == "OK")
+
+
+errors[[y]] <- annualerrors
+
+multitable[[y]] <- annualmultitable
+
+matchedvials[[y]] <-annualmatchedvials
+}
+
+
+
+
+allvialmatch_errors <- dplyr::bind_rows(errors)%>%
+    filter(vial_id == str_remove(vial_id, "\\.1"),    #remove trailing .1, .2, .3 that occurs when vial_id is in multiple tables in the KRSP database
+         vial_id == str_remove(vial_id, "\\.2"), 
+         vial_id == str_remove(vial_id, "\\.3")) %>%
+  collect()%>%
+   distinct(vial_id, .keep_all = TRUE) #keep only unique vial_id data after removing trailing decimals
+ 
+
+allvialmatch_multitables <- dplyr::bind_rows(multitable) %>%
+  mutate(vial_id = str_remove(vial_id, "\\.1"),    #remove trailing .1, .2, .3 that occurs when vial_id is in multiple tables in the KRSP database
+         vial_id = str_remove(vial_id, "\\.2"), 
+         vial_id = str_remove(vial_id, "\\.3")) %>%
+  collect()%>%
+   distinct(vial_id, .keep_all = TRUE) #keep only unique vial_id data after removing trailing decimals
+ 
+allmatchedvials <- dplyr::bind_rows(matchedvials) 
+
+
+
+write.csv(allvialmatch_errors, "vialmatch_errors.csv")
+write.csv(allvialmatch_multitables, "vialmatch_multitables.csv")
+write.csv(allmatchedvials, "matchedvials.csv")
+
+```
+
+
+
