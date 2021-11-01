@@ -1,0 +1,26 @@
+
+VialMatching intends to search for errors in the KRSP database related to how DNA vials (vial_id) connect to one and only one squirrel_id. In some cases,
+the same vial_id will have been imputed for multiple trapping and/or juvenile records. These flagged errors should be investigated prior to paternity analyses. 
+
+From the associated .Rmd file: 
+
+---
+title: "VialMatching2021-10-31"
+author: "Andrea Wishart"
+date: "31/10/2021"
+output: html_document
+---
+#This code builds on squirrel_id_finder.R (originally written by Ty Wagner with help and advice from Andrew McAdam). New code in this file written by Andrea Wishart. This code first defines the squirrel_id_finder function, then includes Wagner's example code. The remainder of the code is to search for errors related to DNA vials and squirrel IDs to work out prior to paternity assigment steps. Errors are beginning to be logged on KRSP GitHub under Database Errors; but we may want to discuss a more efficient use of the output files. 
+
+#Matching DNA vial to squirrel ID is done year-by-year using a for loop to help pin down errors in the database. 
+
+#Output files from this code: 
+
+#1. matchedvials.csv ---- contains successfully matched vial_id to squirrel_id with no detected errors (i.e., single vial to single squirrel, and vial found in only one table in the database)
+
+#2. vialmatch_errors.csv ----contains vials that matched to more than one squirrel 
+
+#3. vialmatch_multitables.csv ----contains squirrel ID - vial ID matches that are returned from multiple tables in the database (i.e., vial was entered for squirrel in both trapping AND in juvenile). If we conclude these aren't errors, I can kick this code and allow them to be OK (figured better to flag for now). 
+
+
+###NOTE: the select() function is specifically called as dplyr::select throughout. 
