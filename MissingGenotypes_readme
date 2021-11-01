@@ -1,0 +1,10 @@
+#This code builds on the cervus_prep function to look for errors in missing genotypes in the database. It allows pulling a list of candidate juveniles by birth year, and looks for errors associated with missing genotypes for vials/squirrels. 
+
+Outputs from the cervuvs_prep function will be a list of candidate squirrel identities and a list of candidate genotypes. 
+
+Outputs from the error checking portion of the code include genotypematch_errors.csv which indicates whether a squirrel has one genotype (OK), zero genotypes (issue) or more than one genotype (potential issue). 
+
+
+
+
+#Cervus Prep - this function and example code is by Ty Wagner with advice from Andrew McAdam 
