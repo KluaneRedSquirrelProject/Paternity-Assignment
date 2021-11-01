@@ -225,6 +225,8 @@ my.matchedvials <- matchedvials %>%
 yearsquirrels <- left_join(my.matchedvials, juvs, by = c("squirrel_id"))%>%
   mutate(yoy = ifelse(year == byear, "yes", "no"))
 
+
+
 #Many of the young-of-year = no cases are bcert = N, and most of these are fate 2 = new animal never tagged before. These should be checked, as they might need to be run through Cervus in the previous year's batch of juveniles. 
 
 #Check that these squirrels are in the genotype file. We have to go by dna vial, NOT squirrel_id, because individuals who have not been run through Cervus (i.e., 2015 and beyond) are not matched to their vials in the genotypes table. 
@@ -241,6 +243,12 @@ genocheck.2 <- genocheck %>%
   group_by(squirrel_id)%>%
   summarise(genotype = sum(!is.na(squirrel_id.gtyp)))
 
+genocheck.2 <- genocheck.2 %>%
+  mutate(error.notes = ifelse(genotype == 1, "one genotype-squirrel match - OK", 
+                              ifelse(genotype == 2, "squirrel has two genotypes - check", 
+                                     ifelse(genotype==0, "squirrel has no genotype", 
+                                            "XXX"))))
+write.csv(genocheck.2, "genotypematch_errors.csv")
 
 #There still look to be a number of squirrels with DNA vials that do NOT have genotypes. 
 
