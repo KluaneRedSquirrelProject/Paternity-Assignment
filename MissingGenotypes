@@ -278,7 +278,7 @@ by.year <- matcherrors.ks %>%
   group_by(juvenile.byear)%>%
   summarise(n.errors = n_distinct(squirrel_id))
 
-write.csv(genocheck.ks, "KSgenotypematch_errors.csv")
+write.csv(matcherrors.ks, "KSgenotypematch_errors.csv")
 
 #There still look to be a number of squirrels with DNA vials that do NOT have genotypes. 
 #There still look to be a number of squirrels with DNA vials that do NOT have genotypes. 
