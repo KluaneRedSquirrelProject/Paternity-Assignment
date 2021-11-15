@@ -182,9 +182,6 @@ cervus_prep <- function(juv_ids) {
 #Prepare the list of juveniles
 
 ```{r}
-#First, name your year of interest - that is, for which year do you want to get a list of juveniles?
-
-my.year <- c("2015")
 #Disconnect and reconnect
 dbDisconnectAll()
 con <- krsp_connect(host = "krsp.cepb5cjvqban.us-east-2.rds.amazonaws.com",
@@ -207,7 +204,7 @@ all_gtypes <- tbl(con2, "genotypes") %>%
 juv_ids <- tbl(con, "flastall2") 
 
 juvs <- as.data.frame(juv_ids) %>%
-  dplyr::select(squirrel_id, f1, byear, bcert, litter_id, dam_id)
+  dplyr::select(squirrel_id, f1, byear, bcert, litter_id, dam_id, gr)
   #filter(squirrel_id %in% all_gtypes$squirrel_id) %>% ## This line won't work - genotype table does not have squirrel IDs for our years of interest, we must match them first to vials 
 
 
@@ -215,15 +212,26 @@ juvs <- as.data.frame(juv_ids) %>%
 matchedvials <- read.csv("matchedvials.csv")
 
 
+#Loop years 
+ksmatcherrors <- list()# Create an empty object to be used to store errors
+
+
+for (y in years) {
+	print(y)
+  
+
+
 my.matchedvials <- matchedvials %>%
-  filter(year %in% my.year)%>%
+  filter(year == y)%>%
   mutate(squirrel_id = squirrel_id1)%>%
   collect()%>%
   dplyr::select(vial_id, squirrel_id, year)
 
 #Now, check that these vial-squirrel matches are for juveniles born within your year of interest (young-of-year yoy), and not adults
 yearsquirrels <- left_join(my.matchedvials, juvs, by = c("squirrel_id"))%>%
-  mutate(yoy = ifelse(year == byear, "yes", "no"))
+  mutate(yoy = ifelse(year == byear, "yes", "no"))%>%
+  collect()%>%
+  filter(yoy == "yes")
 
 
 
@@ -248,8 +256,31 @@ genocheck.2 <- genocheck.2 %>%
                               ifelse(genotype == 2, "squirrel has two genotypes - check", 
                                      ifelse(genotype==0, "squirrel has no genotype", 
                                             "XXX"))))
-write.csv(genocheck.2, "genotypematch_errors.csv")
 
+
+genocheck.3 <- left_join(genocheck.2, juvs, by = "squirrel_id") %>%
+  dplyr::select(squirrel_id, 
+                genotype, 
+                error.notes, 
+                gr)
+
+genocheck.ks <- genocheck.3 %>%
+  filter(gr %in% c("KL", "SU"), 
+         !genotype == 1)%>%
+  mutate(juvenile.byear = y)
+
+ksmatcherrors[[y]] <- genocheck.ks
+
+}
+matcherrors.ks <- dplyr::bind_rows(ksmatcherrors) 
+
+by.year <- matcherrors.ks %>%
+  group_by(juvenile.byear)%>%
+  summarise(n.errors = n_distinct(squirrel_id))
+
+write.csv(genocheck.ks, "KSgenotypematch_errors.csv")
+
+#There still look to be a number of squirrels with DNA vials that do NOT have genotypes. 
 #There still look to be a number of squirrels with DNA vials that do NOT have genotypes. 
 
   
