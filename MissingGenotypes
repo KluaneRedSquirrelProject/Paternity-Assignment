@@ -42,6 +42,8 @@ cervus_prep <- function(juv_ids) {
     filter(!is.na("03a")) %>% # this should be ok since missing data are "0"
     dplyr::select(c(squirrel_id, "03a":"55b"))
   
+   #Right now, it kicks the error "one or more juv_ids do not have entries in the krsp genotypes DB". Looks like the function is wanting to match against squirrel IDs in the genotypes file here; but genotypes aren't in here for unmatched squirrels (2015 onwards)
+  
   if (all(juv_ids %in% all_gtypes$squirrel_id) == F) {
     warning("one or more juv_ids do not have entries in the krsp genotypes DB")
   }
