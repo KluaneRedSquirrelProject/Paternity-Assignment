@@ -67,7 +67,8 @@ squirrel_id_finder <- function(vial_id) {
   
   flastall <- tbl(con, "flastall2") %>%
     collect() %>%
-    dplyr::select(squirrel_id)
+    dplyr::select(squirrel_id)%>%
+    collect()
   
   juvenile <- tbl(con, "juvenile") %>%
     filter(!is.na(dna1) & !is.na(dna2)) %>% 
@@ -77,7 +78,34 @@ squirrel_id_finder <- function(vial_id) {
   trapping <- tbl(con, "trapping") %>%
     filter(!is.na(dna1) & !is.na(dna2)) %>%
    dplyr::select(squirrel_id, trap_dna1 = dna1, trap_dna2 = dna2) %>%
-    collect()
+      collect()
+  
+  #Need to fix some squirrel IDs in these tables - bring in historic ids 
+historic_ids<- tbl(con, "historic_squirrel_ids") %>% 
+  select (old_squirrel_id, new_squirrel_id) %>% 
+  collect()
+
+#fix squirrel id in flastall dataframe 
+flastall <- left_join(flastall, historic_ids, by=c("squirrel_id" = "old_squirrel_id")) %>% #Fix squirrel IDs
+   collect()%>%
+  mutate (squirrel_id = ifelse(is.na(new_squirrel_id), 
+                                 squirrel_id, new_squirrel_id))
+
+#fix squirrel id in juvenile dataframe 
+juvenile <- left_join(juvenile, historic_ids, by=c("squirrel_id" = "old_squirrel_id")) %>% #Fix squirrel IDs
+   collect()%>%
+   mutate (squirrel_id = ifelse(is.na(new_squirrel_id), 
+                                 squirrel_id, new_squirrel_id))
+
+#fix squirrel id in trapping dataframe 
+trapping <- left_join(trapping, historic_ids, by=c("squirrel_id" = "old_squirrel_id")) %>% #Fix squirrel IDs
+   collect()%>%
+   mutate (squirrel_id = ifelse(is.na(new_squirrel_id), 
+                                 squirrel_id, new_squirrel_id))
+
+
+
+
   
   # make a phonebook of squirrel_ids and their vial_ids
   id_lookup <- flastall %>%
@@ -107,9 +135,8 @@ squirrel_id_finder <- function(vial_id) {
     print(sid)
   }
   
-  sapply(vial_id, FUN = sid_lookup, simplify = F)
+  (sapply(vial_id, FUN = sid_lookup, simplify = F)) #Currently, this function is only keeping 1 vial per squirrel ID, which can lead to problems when it's *the other* vial that is genotyped. 
 }
-
 ```
 
 #Original example code
