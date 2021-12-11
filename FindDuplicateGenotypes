@@ -1,0 +1,91 @@
+#Finding cases where two genotypes may be from the same individual (identical genotypes at all loci)
+```{r}
+ all_gtypes <- tbl(con2, "genotypes") %>%
+    collect() %>%
+    filter(!is.na("03a")) %>% # this should be ok since missing data are "0"
+    dplyr::select(c(DNA, Grid, BYEAR, "03a":"55b"))
+
+all_gtypes <- as.data.frame(all_gtypes)
+
+all_gtypes<- all_gtypes %>%
+  rename(a03a = '03a', 
+          a03b = '03b',
+          a08a = '08a',
+          a08b = '08b',
+          a14a  = '14a',
+          a14b = '14b',
+          a23a = '23a',
+          a23b  = '23b',
+          a25a  = '25a',
+          a25b  = '25b',
+          a31a  = '31a',
+          a31b = '31b',
+          a32a = '32a',
+          a32b = '32b',
+          a33a = '33a',
+          a33b = '33b',
+          a37a = '37a',
+          a37b = '37b',
+          a38a = '38a',
+          a38b = '38b',
+          a40a = '40a',
+          a40b = '40b',
+          a41a = '41a',
+          a41b = '41b',
+          a42a = '42a',
+          a42b = '42b',
+          a49a = '49a',
+          a49b = '49b',
+          a50a = '50a',
+          a50b = '50b',
+          a55a = '55b')
+  
+all_gtypes<- all_gtypes %>%
+ mutate(genocat = paste(a03a, 
+          a03b,
+          a08a,
+          a08b,
+          a14a,
+          a14b,
+          a23a,
+          a23b,
+          a25a,
+          a25b,
+          a31a,
+          a31b,
+          a32a,
+          a32b,
+          a33a,
+          a33b,
+          a37a,
+          a37b,
+          a38a,
+          a38b,
+          a40a,
+          a40b,
+          a41a,
+          a41b,
+          a42a, 
+          a42b,
+          a49a, 
+          a49b, 
+          a50a, 
+          a50b, 
+          a55a, sep = '_'))
+
+all_gtypes <- all_gtypes %>%
+  group_by(genocat)%>%
+  mutate(dupe =  n_distinct(DNA))%>%
+  collect()%>%
+  ungroup()%>%
+  dplyr::select(genocat, DNA, BYEAR, dupe)
+
+dup.gtypes <- all_gtypes %>%
+  filter(dupe > 1)
+  
+dup.gtypes2 <-dup.gtypes%>% 
+          group_by(genocat) %>% 
+          summarise(matchingDNA = list(unique(DNA)))
+
+
+```
